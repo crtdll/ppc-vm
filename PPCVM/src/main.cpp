@@ -7,6 +7,7 @@
 #define DEBUG
 
 struct registers {
+	uint32_t xer; // xer register
 	uint64_t msr; // machine status register
 	uint64_t iar; // instruction address register
 	uint64_t lr;  // link register
@@ -2510,6 +2511,8 @@ enum opcode {
 enum extended_opcode {
 	eop_or = 444,
     eop_bclr = 16,
+    eop_mtspr = 467,
+    eop_mfspr = 339,
 };
 
 #pragma endregion
@@ -2648,6 +2651,48 @@ public:
                             context.gpr[val_2.bits.ra] = context.gpr[val_2.bits.rs] | (0 || val_2.bits.ui);
                             break;
                         }
+
+
+                        case eop_mfspr: { // mfspr
+                            mfspr val_2 = { in.value };
+                            switch (((val_2.bits.spr >> 5) & 0x1F) | (val_2.bits.spr & 0x1F)) {
+
+                                case 1: { // xer
+                                    context.gpr[val_2.bits.rt] = context.xer;
+                                    break;
+                                }
+                                case 8: { // lr
+                                    context.gpr[val_2.bits.rt] = context.lr;
+                                    break;
+                                }
+                                case 9: { // ctr
+                                    context.gpr[val_2.bits.rt] = context.ctr;
+                                    break;
+                                }
+                            }
+                            break;
+                        }
+
+
+                        case eop_mtspr: { // mtspr
+                            mtspr val_2 = { in.value };
+                            switch (((val_2.bits.spr >> 5) & 0x1F) | (val_2.bits.spr & 0x1F)) {
+
+                                case 1: { // xer
+                                    context.xer = context.gpr[val_2.bits.rt];
+                                    break;
+                                }
+                                case 8: { // lr
+                                    context.lr = context.gpr[val_2.bits.rt];
+                                    break;
+                                }
+                                case 9: { // ctr
+                                    context.ctr = context.gpr[val_2.bits.rt];
+                                    break;
+                                }
+                            }
+                            break;
+                        }
                     }
 
                     break;
@@ -2777,6 +2822,15 @@ int main() {
 	};*/
 
     uint8_t payload[] = {
+
+        // testing mf/mt spr
+        0x38, 0x60, 0x00, 0x69,
+        0x7C, 0x68, 0x03, 0xA6,
+        0xFF, 0xFF, 0xFF, 0xFF,     // DEBUG BREAKPOINT
+        0x7D, 0x88, 0x02, 0xA6,
+        0xFF, 0xFF, 0xFF, 0xFF,     // DEBUG BREAKPOINT
+        // testing mf/mt spr
+
         0x94, 0x21, 0xFF, 0x00,
         0x48, 0x00, 0x00, 0x21, 
         0x38, 0x63, 0x00, 0x30,
