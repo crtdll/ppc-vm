@@ -2575,10 +2575,11 @@ public:
 
                 case op_lwz: {
                     lwz val = { in.value };
-                    context.gpr[val.bits.rt] = _byteswap_ulong(*(uint32_t*)(context.gpr[val.bits.ra] + val.bits.ds));
+                    context.gpr[val.bits.rt] = _byteswap_ulong(*(uint32_t*)(context.gpr[val.bits.ra] + (short)val.bits.ds));
 
 #ifdef DEBUG
-                    printf("lwz r%i, 0x%X(r%i)\n", val.bits.rt, val.bits.ds, val.bits.ra);
+                    printf("lwz r%i, %s0x%X(r%i)\n", val.bits.rt, (short)val.bits.ds > 0 ? "" : "-", (short)val.bits.ds > 0 ? (short)val.bits.ds : abs((short)val.bits.ds), val.bits.ra);
+
 #endif
                     break;
                 }
@@ -2652,21 +2653,32 @@ public:
                             break;
                         }
 
-
                         case eop_mfspr: { // mfspr
                             mfspr val_2 = { in.value };
                             switch (((val_2.bits.spr >> 5) & 0x1F) | (val_2.bits.spr & 0x1F)) {
 
                                 case 1: { // xer
                                     context.gpr[val_2.bits.rt] = context.xer;
+
+#ifdef DEBUG
+                                    printf("mfxer r%i\n", val_2.bits.rt);
+#endif
                                     break;
                                 }
                                 case 8: { // lr
                                     context.gpr[val_2.bits.rt] = context.lr;
+
+#ifdef DEBUG
+                                    printf("mflr r%i\n", val_2.bits.rt);
+#endif
                                     break;
                                 }
                                 case 9: { // ctr
                                     context.gpr[val_2.bits.rt] = context.ctr;
+
+#ifdef DEBUG
+                                    printf("mfctr r%i\n", val_2.bits.rt);
+#endif
                                     break;
                                 }
                             }
@@ -2677,17 +2689,26 @@ public:
                         case eop_mtspr: { // mtspr
                             mtspr val_2 = { in.value };
                             switch (((val_2.bits.spr >> 5) & 0x1F) | (val_2.bits.spr & 0x1F)) {
-
                                 case 1: { // xer
                                     context.xer = context.gpr[val_2.bits.rt];
+
+#ifdef DEBUG
+                                    printf("mtxer r%i\n", val_2.bits.rt);
+#endif
                                     break;
                                 }
                                 case 8: { // lr
                                     context.lr = context.gpr[val_2.bits.rt];
+#ifdef DEBUG
+                                    printf("mtlr r%i\n", val_2.bits.rt);
+#endif
                                     break;
                                 }
                                 case 9: { // ctr
                                     context.ctr = context.gpr[val_2.bits.rt];
+#ifdef DEBUG
+                                    printf("mtctr r%i\n", val_2.bits.rt);
+#endif
                                     break;
                                 }
                             }
@@ -2798,53 +2819,27 @@ void setup_syscalls(virtual_machine* vm) {
 }
 
 int main() {
-	/*uint8_t payload[] = {
-		0x38, 0x80, 0x00, 0x59,		// li %r4, 0x59
-		0x38, 0x84, 0x00, 0x10,		// addi %r4, %r4, 0x10
-		0x38, 0x60, 0x00, 0x3C,		// li %r3, 0x3C					->>> offset from payload base to string
-		0x38, 0x00, 0x00, 0x00,		// li %r0, 0					->>> "printf" syscall
-		0x44, 0x00, 0x00, 0x02,		// sc
-        0x38, 0x00, 0x00, 0x01,		// li %r0, 1					->>> "set r3 to execution" syscall
-        0x44, 0x00, 0x00, 0x02,		// sc
-        0x81, 0x63, 0x00, 0x24,     // lwz %r11, 0x24(%r3)
-        0x94, 0x21, 0xFF, 0x90,     // stwu %r1, -0x70(%r1)
-        0x90, 0x61, 0x00, 0x10,     // stw %r3, 0x10(%r1)
-        0x38, 0x00, 0x00, 0x02,		// li %r0, 2					->>> "print stack" syscall
-        0x44, 0x00, 0x00, 0x02,		// sc
-        0x38, 0x21, 0x00, 0x70,     // addi %r1, %r1, 0x70
-		0x4E, 0x80, 0x00, 0x20,		// blr
-        0xFF, 0xFF, 0xFF, 0xFF,     // DEBUG BREAKPOINT
-		
-		0x68, 0x65, 0x79, 0x20,		// "hey "
-		0x66, 0x72, 0x6F, 0x6D,		// "from"
-		0x20, 0x50, 0x50, 0x43,		// " PPC"
-		0x0A, 0x00, 0x00, 0x00		// "\n" + null terminator
-	};*/
-
     uint8_t payload[] = {
-
-        // testing mf/mt spr
-        0x38, 0x60, 0x00, 0x69,
-        0x7C, 0x68, 0x03, 0xA6,
-        0xFF, 0xFF, 0xFF, 0xFF,     // DEBUG BREAKPOINT
         0x7D, 0x88, 0x02, 0xA6,
+        0x91, 0x81, 0xFF, 0xF8,
+        0x94, 0x21, 0xFF, 0xF0,
+        0x38, 0x60, 0x00, 0x59,
+        0x38, 0x63, 0x00, 0x10,
         0xFF, 0xFF, 0xFF, 0xFF,     // DEBUG BREAKPOINT
-        // testing mf/mt spr
+        0x38, 0x00, 0x00, 0x01,
+        0x44, 0x00, 0x00, 0x02,
+        0x38, 0x63, 0x00, 0x3C,
+        0x38, 0x00, 0x00, 0x00,
+        0x44, 0x00, 0x00, 0x02,
+        0x38, 0x21, 0x00, 0x10,
+        0x81, 0x81, 0xFF, 0xF8,
+        0x7D, 0x88, 0x03, 0xA6,
+        0x4E, 0x80, 0x00, 0x20,
 
-        0x94, 0x21, 0xFF, 0x00,
-        0x48, 0x00, 0x00, 0x21, 
-        0x38, 0x63, 0x00, 0x30,
-        0x48, 0x00, 0x00, 0x0D, 
-        0x38, 0x21, 0x01, 0x00, 
-        0x4E, 0x80, 0x00, 0x20,
-        0x38, 0x00, 0x00, 0x00, 
-        0x44, 0x00, 0x00, 0x02, 
-        0x4E, 0x80, 0x00, 0x20,
-        0x38, 0x00, 0x00, 0x01, 
-        0x44, 0x00, 0x00, 0x02, 
-        0x4E, 0x80, 0x00, 0x20,
-        0x6E, 0x69, 0x67, 0x67, 
-        0x65, 0x72, 0x0A, 0x00
+        0x68, 0x65, 0x79, 0x20,		// "hey "
+        0x66, 0x72, 0x6F, 0x6D,		// "from"
+        0x20, 0x50, 0x50, 0x43,		// " PPC"
+        0x0A, 0x00, 0x00, 0x00		// "\n" + null terminator
     };
 
 	virtual_machine vm;
