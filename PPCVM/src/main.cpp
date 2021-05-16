@@ -7,7 +7,6 @@
 #define DEBUG
 
 struct registers {
-	uint32_t xer; // xer register
 	uint64_t msr; // machine status register
 	uint64_t iar; // instruction address register
 	uint64_t lr;  // link register
@@ -15,21 +14,83 @@ struct registers {
 
 	uint64_t gpr[32]; // general registers 0 to 31
 	
-	// condition register
-	union {
-		uint32_t value;
+    // xer register
+    union {
+        uint32_t value;
+        struct {
+            uint32_t so : 1;
+            uint32_t ov : 1;
+            uint32_t ca : 1;
+        } fields;
+    } xer;
 
-		struct {
-			uint32_t cr0 : 4;
-			uint32_t cr1 : 4;
-			uint32_t cr2 : 4;
-			uint32_t cr3 : 4;
-			uint32_t cr4 : 4;
-			uint32_t cr5 : 4;
-			uint32_t cr6 : 4;
-			uint32_t cr7 : 4;
-		};
-	} cr;
+	// condition register
+    union {
+        uint32_t value;
+        struct {
+            uint32_t lt : 1;
+            uint32_t gt : 1;
+            uint32_t eq : 1;
+            uint32_t so : 1;
+            uint32_t reserved : 28;
+        } cr0;
+        struct {
+            uint32_t : 4;
+            uint32_t lt : 1;
+            uint32_t gt : 1;
+            uint32_t eq : 1;
+            uint32_t so : 1;
+            uint32_t : 24;
+        } cr1;
+        struct {
+            uint32_t : 8;
+            uint32_t lt : 1;
+            uint32_t gt : 1;
+            uint32_t eq : 1;
+            uint32_t so : 1;
+            uint32_t : 20;
+        } cr2;
+        struct {
+            uint32_t : 12;
+            uint32_t lt : 1;
+            uint32_t gt : 1;
+            uint32_t eq : 1;
+            uint32_t so : 1;
+            uint32_t : 16;
+        } cr3;
+        struct {
+            uint32_t : 16;
+            uint32_t lt : 1;
+            uint32_t gt : 1;
+            uint32_t eq : 1;
+            uint32_t so : 1;
+            uint32_t : 12;
+        } cr4;
+        struct {
+            uint32_t : 20;
+            uint32_t lt : 1;
+            uint32_t gt : 1;
+            uint32_t eq : 1;
+            uint32_t so : 1;
+            uint32_t : 8;
+        } cr5;
+
+        struct {
+            uint32_t : 24;
+            uint32_t lt : 1;
+            uint32_t gt : 1;
+            uint32_t eq : 1;
+            uint32_t so : 1;
+            uint32_t : 4;
+        } cr6;
+        struct {
+            uint32_t : 28;
+            uint32_t lt : 1;
+            uint32_t gt : 1;
+            uint32_t eq : 1;
+            uint32_t so : 1;
+        } cr7;
+    } cr;
 
 	double fpscr;	// floating point status/control register
 	double fpr[32]; // floating point registers 0 to 31
@@ -2507,9 +2568,12 @@ enum opcode {
     op_stw = 36,
     op_stwu = 37,
     op_stb = 38
+
+
 };
 
 enum extended_opcode {
+	eop_add = 266,
 	eop_or = 444,
     eop_bclr = 16,
     eop_mtspr = 467,
@@ -2669,12 +2733,77 @@ public:
                             break;
                         }
 
+                        case eop_add: {
+                            addx val_2 = { in.value };
+
+                            uint64_t ra = (uint64_t)context.gpr[val_2.bits.ra];
+                            uint64_t rb = (uint64_t)context.gpr[val_2.bits.rb];
+
+                            context.gpr[val_2.bits.rt] = ra + rb;
+
+                            uint64_t rt = context.gpr[val_2.bits.rt];
+
+                            if (val_2.bits.oe) {
+
+                                if ((ra ^ ~rb) & (ra ^ rt) & 0x80000000) {
+                                    context.xer.fields.so = 1;
+                                    context.xer.fields.ov = 1;
+                                }
+                                else {
+                                    context.xer.fields.ov = 0;
+                                }
+                            }
+
+                            if (val_2.bits.rc) {
+
+                                context.cr.cr0.lt = 0;
+                                context.cr.cr0.gt = 0;
+                                context.cr.cr0.eq = 0;
+                                context.cr.cr0.so = 0;
+
+                                if (context.gpr[val_2.bits.rt] == 0) {
+                                    context.cr.cr0.eq = 1;
+                                }
+
+                                else if (context.gpr[val_2.bits.rt] & 0x80000000) {
+                                    context.cr.cr0.lt = 1;
+                                }
+
+                                else {
+                                    context.cr.cr0.gt = 1;
+                                }
+
+                                context.cr.cr0.so = context.xer.fields.so;
+                            }
+
+#ifdef DEBUG
+                            if (val.bits.oe == 0 && val.bits.rc == 0) {
+                                // add
+                                printf("add r%i, r%i, r%i\n", val.bits.rt, val.bits.ra, val.bits.rb);
+                            }
+                            else if (val.bits.oe == 0 && val.bits.rc == 1) {
+                                // add.
+                                printf("add. r%i, r%i, r%i\n", val.bits.rt, val.bits.ra, val.bits.rb);
+                            }
+                            else if (val.bits.oe == 1 && val.bits.rc == 0) {
+                                // addo
+                                printf("addo r%i, r%i, r%i\n", val.bits.rt, val.bits.ra, val.bits.rb);
+                            }
+                            else if (val.bits.oe == 1 && val.bits.rc == 1) {
+                                // addo.
+                                printf("addo. r%i, r%i, r%i\n", val.bits.rt, val.bits.ra, val.bits.rb);
+                            }
+#endif
+
+                            break;
+                        }
+
                         case eop_mfspr: { // mfspr
                             mfspr val_2 = { in.value };
                             switch (((val_2.bits.spr >> 5) & 0x1F) | (val_2.bits.spr & 0x1F)) {
 
                                 case 1: { // xer
-                                    context.gpr[val_2.bits.rt] = context.xer;
+                                    context.gpr[val_2.bits.rt] = (uint64_t)context.xer.value;
 
 #ifdef DEBUG
                                     printf("mfxer r%i\n", val_2.bits.rt);
@@ -2706,7 +2835,7 @@ public:
                             mtspr val_2 = { in.value };
                             switch (((val_2.bits.spr >> 5) & 0x1F) | (val_2.bits.spr & 0x1F)) {
                                 case 1: { // xer
-                                    context.xer = context.gpr[val_2.bits.rt];
+                                    context.xer.value = (uint32_t)context.gpr[val_2.bits.rt];
 
 #ifdef DEBUG
                                     printf("mtxer r%i\n", val_2.bits.rt);
@@ -2785,8 +2914,8 @@ public:
 		}
 
 		printf("msr=0x%016I64X iar=0x%016I64X lr=0x%016I64X ctr=0x%016I64X\n", context.msr, context.iar, context.lr, context.ctr);
-		printf("cr0=0x%X cr1=0x%X cr2=0x%X cr3=0x%X\n", context.cr.cr0, context.cr.cr1, context.cr.cr2, context.cr.cr3);
-		printf("cr4=0x%X cr5=0x%X cr6=0x%X cr7=0x%X\n", context.cr.cr4, context.cr.cr5, context.cr.cr6, context.cr.cr7);
+		printf("cr0=0x%X cr1=0x%X cr2=0x%X cr3=0x%X\n", (context.cr.value >> 28) & 0xF, (context.cr.value >> 24) & 0xF, (context.cr.value >> 20) & 0xF, (context.cr.value >> 16) & 0xF);
+		printf("cr4=0x%X cr5=0x%X cr6=0x%X cr7=0x%X\n", (context.cr.value >> 12) & 0xF, (context.cr.value >> 8) & 0xF, (context.cr.value >> 4) & 0xF, (context.cr.value >> 0) & 0xF);
 	}
 
 	uint8_t* get_ram() { return ram; }
