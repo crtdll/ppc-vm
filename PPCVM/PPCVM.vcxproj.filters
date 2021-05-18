@@ -18,9 +18,21 @@
     <ClInclude Include="src\stdafx.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\instructions.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\registers.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\virtual_machine.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\virtual_machine.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
