@@ -16,6 +16,7 @@ public:
 	uint8_t* get_ram() { return ram; }
 	uint8_t* get_stack() { return stack; }
 	registers* get_context() { return &context; }
+	void* get_syscall(int index) { return syscall_table[index]; }
 private:
 	registers context;
 	uint8_t ram[RAM];

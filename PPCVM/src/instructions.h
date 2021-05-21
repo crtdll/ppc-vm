@@ -2481,6 +2481,7 @@ enum opcode {
 };
 
 enum extended_opcode {
+	eop_none = -1,
 	eop_cmp = 0,
 	eop_cmpl = 32,
 	eop_add = 266,
@@ -2488,4 +2489,10 @@ enum extended_opcode {
 	eop_bclr = 16,
 	eop_mtspr = 467,
 	eop_mfspr = 339,
+};
+
+enum iteration_reason {
+	it_ok,
+	it_continue,
+	it_return
 };

@@ -14,7 +14,7 @@ void setup_syscalls(virtual_machine* vm) {
 
 	vm->add_syscall([](virtual_machine* vm) {
 		// print stack
-		printf("current stack allocated: 0x%X\n", (uint64_t)&vm->get_stack()[STACK] - vm->get_context()->gpr[1]);
+		printf("current stack allocated: 0x%llX\n", (uint64_t)&vm->get_stack()[STACK] - vm->get_context()->gpr[1]);
 		printf("last stack frame: 0x%llx\n", *(uint64_t*)vm->get_context()->gpr[1]);
 	}, 2);
 
@@ -26,7 +26,7 @@ void setup_syscalls(virtual_machine* vm) {
 
 	vm->add_syscall([](virtual_machine* vm) {
 		// memset
-		memset((void*)vm->get_context()->gpr[3], vm->get_context()->gpr[4], vm->get_context()->gpr[5]);
+		memset((void*)vm->get_context()->gpr[3], (int)vm->get_context()->gpr[4], vm->get_context()->gpr[5]);
 	}, 4);
 }
 
