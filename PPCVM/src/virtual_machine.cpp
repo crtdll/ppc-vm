@@ -168,6 +168,87 @@ namespace handlers {
 #endif
 	}
 
+	void bc(instruction in, virtual_machine* vm, iteration_reason* out_reason) {
+		registers* context = vm->get_context();
+		bcx val = { in.value };
+
+		uint32_t cr_field = val.bits.bi >> 2;
+		uint32_t cr_field_bit = val.bits.bi & 3;
+		uint32_t branch_offset = val.bits.bd << 2;
+
+		bool decrement_ctr = false;
+		if (!(val.bits.bo & 0b00100)) {
+			context->ctr = context->ctr - 1;
+			decrement_ctr = true;
+		}
+
+		bool should_branch = false;
+		if (val.bits.bo & 0b10000) {
+			if (decrement_ctr) {
+				should_branch = true;
+			}
+			else if (val.bits.bo & 0b00010) {
+				should_branch = context->ctr == 0;
+#ifdef DEBUG
+				printf("bdz cr%d, %s0x%x\n", cr_field, (int16_t)branch_offset > 0 ? "" : "-", (int16_t)branch_offset > 0 ? (int16_t)branch_offset : abs((int16_t)branch_offset));
+#endif
+			}
+			else {
+				should_branch = context->ctr != 0;
+#ifdef DEBUG
+				printf("bdnz cr%d, %s0x%x\n", cr_field, (int16_t)branch_offset > 0 ? "" : "-", (int16_t)branch_offset > 0 ? (int16_t)branch_offset : abs((int16_t)branch_offset));
+#endif
+			}
+		} else {
+			if (val.bits.bo & 0b01000) {
+				should_branch = context->cr[cr_field].test(cr_field_bit);
+#ifdef DEBUG
+				switch (cr_field_bit) {
+					case registers::cr_bit::lt: {
+						printf("blt cr%d, %s0x%x\n", cr_field, (int16_t)branch_offset > 0 ? "" : "-", (int16_t)branch_offset > 0 ? (int16_t)branch_offset : abs((int16_t)branch_offset));
+						break;
+					}
+					case registers::cr_bit::gt: {
+						printf("bgt cr%d, %s0x%x\n", cr_field, (int16_t)branch_offset > 0 ? "" : "-", (int16_t)branch_offset > 0 ? (int16_t)branch_offset : abs((int16_t)branch_offset));
+						break;
+					}
+					case registers::cr_bit::eq: {
+						printf("beq cr%d, %s0x%x\n", cr_field, (int16_t)branch_offset > 0 ? "" : "-", (int16_t)branch_offset > 0 ? (int16_t)branch_offset : abs((int16_t)branch_offset));
+						break;
+					}
+				}
+#endif
+			}
+			else {
+				should_branch = !context->cr[cr_field].test(cr_field_bit);
+#ifdef DEBUG
+				switch (cr_field_bit) {
+					case registers::cr_bit::lt: {
+						printf("bge cr%d, %s0x%x\n", cr_field, (int16_t)branch_offset > 0 ? "" : "-", (int16_t)branch_offset > 0 ? (int16_t)branch_offset : abs((int16_t)branch_offset));
+						break;
+					}
+					case registers::cr_bit::gt: {
+						printf("ble cr%d, %s0x%x\n", cr_field, (int16_t)branch_offset > 0 ? "" : "-", (int16_t)branch_offset > 0 ? (int16_t)branch_offset : abs((int16_t)branch_offset));
+						break;
+					}
+					case registers::cr_bit::eq: {
+						printf("bne cr%d, %s0x%x\n", cr_field, (int16_t)branch_offset > 0 ? "" : "-", (int16_t)branch_offset > 0 ? (int16_t)branch_offset : abs((int16_t)branch_offset));
+						break;
+					}
+				}
+#endif
+			}
+		}
+
+		if (should_branch) {
+			if (val.bits.lk) {
+				context->lr = context->iar + 1;
+			}
+			int32_t offset = (int32_t)((int16_t)(branch_offset) / sizeof(int32_t));
+			context->iar = val.bits.aa ? (uint32_t)(offset) : (uint32_t)(context->iar + offset);
+		}
+	}
+
 	void cmpli(instruction in, virtual_machine* vm, iteration_reason* out_reason) {
 		registers* context = vm->get_context();
 		::cmpli val = { in.value };
@@ -452,6 +533,7 @@ std::unordered_map<uint32_t, std::function<void(instruction, virtual_machine*, i
 	{ op_stw, handlers::stw },
 	{ op_stb, handlers::stb },
 	{ op_b, handlers::b },
+	{ op_bc, handlers::bc },
 	{ op_cmpli, handlers::cmpli },
 	{ op_bundle_31, handlers::bundle_31 },
 	{ op_bundle_19, handlers::bundle_19 },

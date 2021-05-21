@@ -2472,6 +2472,7 @@ enum opcode {
 	op_lis = 15,
 	op_sc = 17,
 	op_b = 18,
+	op_bc = 16,
 	op_bundle_19 = 19, // branches
 	op_bundle_31 = 31,
 	op_lwz = 32,
