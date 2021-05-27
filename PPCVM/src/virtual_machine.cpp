@@ -546,13 +546,15 @@ std::unordered_map<uint32_t, std::function<void(instruction, virtual_machine*, i
 	{ op_bundle_19, handlers::bundle_19 },
 };
 
-void virtual_machine::execute(uint8_t* payload) {
+void virtual_machine::execute(uint8_t* payload, void* argument) {
 	printf("\n======== EXECUTING PAYLOAD 0x%p ========\n", payload);
 
 	set_payload(payload);
+	set_argument(argument);
 	memset(get_stack(), 0, STACK);
 
 	get_current_context()->gpr[1] = (uint64_t)&get_stack()[STACK];
+	get_current_context()->gpr[3] = (uint64_t)argument;
 
 	CreateThread(0, 0, [](LPVOID param) -> DWORD {
 		virtual_machine* _this = (virtual_machine*)param;

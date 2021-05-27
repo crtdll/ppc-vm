@@ -38,7 +38,7 @@ void setup_syscalls() {
         // "create thread"
         virtual_machine* payload = get_core()->create_vm(vm->get_current_context()->gpr[3]);
         if (payload) {
-            payload->execute((uint8_t*)vm->get_current_context()->gpr[4]);
+            payload->execute((uint8_t*)vm->get_current_context()->gpr[4], (void*)vm->get_current_context()->gpr[5]);
         }
     }, 6);
 }
@@ -151,7 +151,8 @@ int main() {
         0x94, 0x21, 0xFF, 0xF0,
         0x38, 0x00, 0x00, 0x05,
         0x44, 0x00, 0x00, 0x02,
-        0x38, 0x63, 0x00, 0x38,
+        0x38, 0x63, 0x00, 0x3C,
+        0x38, 0xA0, 0x00, 0x59,
         0x7C, 0x64, 0x1B, 0x78,
         0x38, 0x60, 0x00, 0xFF,
         0x38, 0x00, 0x00, 0x06,
@@ -160,7 +161,7 @@ int main() {
         0x81, 0x81, 0xFF, 0xF8,
         0x7D, 0x88, 0x03, 0xA6,
         0x4E, 0x80, 0x00, 0x20,
-        0x38, 0x60, 0x00, 0x69,
+        0x38, 0x63, 0x00, 0x10,
         0x38, 0x00, 0x00, 0x03,
         0x44, 0x00, 0x00, 0x02,
         0x4E, 0x80, 0x00, 0x20
@@ -179,11 +180,11 @@ int main() {
     // branch condition test
 	virtual_machine* payload_2 = get_core()->create_vm(2);
     if (payload_2) {
-       payload_2->execute(example_2);
+        payload_2->execute(example_2);
     }
     
     // threading test
-	virtual_machine* payload_3 = get_core()->create_vm(2);
+	virtual_machine* payload_3 = get_core()->create_vm(3);
 	if (payload_3) {
         payload_3->execute(example_3);
 	}
