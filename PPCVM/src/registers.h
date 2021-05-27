@@ -25,4 +25,9 @@ struct registers {
 
 	double fpscr;	// floating point status/control register
 	double fpr[32]; // floating point registers 0 to 31
+
+	registers() {
+		msr = 0; iar = 0; lr = 0; ctr = 0;
+		memset(gpr, 0, sizeof(gpr));
+	}
 };

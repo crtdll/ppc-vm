@@ -3,14 +3,19 @@
 #include <unordered_map>
 #include <functional>
 
+core_machine* get_core() {
+	static core_machine instance;
+	return &instance;
+}
+
 namespace handlers {
 	void breakpoint(instruction in, virtual_machine* vm, iteration_reason* out_reason) {
 		printf("breaking\n");
-		DebugBreak();
+		__debugbreak();
 	}
 
 	void cmpi(instruction in, virtual_machine* vm, iteration_reason* out_reason) {
-		registers* context = vm->get_context();
+		registers* context = vm->get_current_context();
 		::cmpi val = { in.value };
 
 		context->cr[val.bits.crfd].reset();
@@ -44,7 +49,7 @@ namespace handlers {
 	}
 
 	void li(instruction in, virtual_machine* vm, iteration_reason* out_reason) {
-		registers* context = vm->get_context();
+		registers* context = vm->get_current_context();
 		::li val = { in.value };
 
 		context->gpr[val.bits.rt] = val.bits.ra == 0 ? val.bits.si : context->gpr[val.bits.ra | 0] + val.bits.si;
@@ -59,7 +64,7 @@ namespace handlers {
 	}
 
 	void lis(instruction in, virtual_machine* vm, iteration_reason* out_reason) {
-		registers* context = vm->get_context();
+		registers* context = vm->get_current_context();
 		::li val = { in.value };
 
 		context->gpr[val.bits.rt] = val.bits.ra == 0 ? (val.bits.si || 0) : (val.bits.ra | 0) + (val.bits.si || 0);
@@ -74,7 +79,7 @@ namespace handlers {
 	}
 
 	void sc(instruction in, virtual_machine* vm, iteration_reason* out_reason) {
-		registers* context = vm->get_context();
+		registers* context = vm->get_current_context();
 		::sc val = { in.value };
 
 #ifdef DEBUG
@@ -83,12 +88,12 @@ namespace handlers {
 #endif
 		if (val.bits.lev == 2) {
 			// the syscall should handle setting return registers
-			((void(*)(virtual_machine*))vm->get_syscall((int)context->gpr[0]))(vm);
+			((void(*)(virtual_machine*))get_core()->get_syscall((int)context->gpr[0]))(vm);
 		}
 	}
 
 	void lwz(instruction in, virtual_machine* vm, iteration_reason* out_reason) {
-		registers* context = vm->get_context();
+		registers* context = vm->get_current_context();
 		::lwz val = { in.value };
 
 		context->gpr[val.bits.rt] = _byteswap_ulong(*(uint32_t*)(context->gpr[val.bits.ra] + (short)val.bits.ds));
@@ -99,7 +104,7 @@ namespace handlers {
 	}
 
 	void stwu(instruction in, virtual_machine* vm, iteration_reason* out_reason) {
-		registers* context = vm->get_context();
+		registers* context = vm->get_current_context();
 		::stwu val = { in.value };
 
 		if (val.bits.ra == 1) {
@@ -117,7 +122,7 @@ namespace handlers {
 	}
 
 	void stw(instruction in, virtual_machine* vm, iteration_reason* out_reason) {
-		registers* context = vm->get_context();
+		registers* context = vm->get_current_context();
 		::stw val = { in.value };
 
 		*(uint32_t*)(context->gpr[val.bits.ra] + (short)val.bits.ds) = _byteswap_ulong((uint32_t)context->gpr[val.bits.rt]);
@@ -127,7 +132,7 @@ namespace handlers {
 	}
 
 	void stb(instruction in, virtual_machine* vm, iteration_reason* out_reason) {
-		registers* context = vm->get_context();
+		registers* context = vm->get_current_context();
 		::stb val = { in.value };
 
 		*(uint8_t*)(context->gpr[val.bits.ra] + (short)val.bits.ds) = (uint8_t)context->gpr[val.bits.rt];
@@ -137,7 +142,7 @@ namespace handlers {
 	}
 
 	void b(instruction in, virtual_machine* vm, iteration_reason* out_reason) {
-		registers* context = vm->get_context();
+		registers* context = vm->get_current_context();
 		bx val = { in.value };
 
 		if (val.bits.lk) {
@@ -169,7 +174,7 @@ namespace handlers {
 	}
 
 	void bc(instruction in, virtual_machine* vm, iteration_reason* out_reason) {
-		registers* context = vm->get_context();
+		registers* context = vm->get_current_context();
 		bcx val = { in.value };
 
 		uint32_t cr_field = val.bits.bi >> 2;
@@ -186,14 +191,12 @@ namespace handlers {
 		if (val.bits.bo & 0b10000) {
 			if (decrement_ctr) {
 				should_branch = true;
-			}
-			else if (val.bits.bo & 0b00010) {
+			} else if (val.bits.bo & 0b00010) {
 				should_branch = context->ctr == 0;
 #ifdef DEBUG
 				printf("bdz cr%d, %s0x%x\n", cr_field, (int16_t)branch_offset > 0 ? "" : "-", (int16_t)branch_offset > 0 ? (int16_t)branch_offset : abs((int16_t)branch_offset));
 #endif
-			}
-			else {
+			} else {
 				should_branch = context->ctr != 0;
 #ifdef DEBUG
 				printf("bdnz cr%d, %s0x%x\n", cr_field, (int16_t)branch_offset > 0 ? "" : "-", (int16_t)branch_offset > 0 ? (int16_t)branch_offset : abs((int16_t)branch_offset));
@@ -208,18 +211,19 @@ namespace handlers {
 						printf("blt cr%d, %s0x%x\n", cr_field, (int16_t)branch_offset > 0 ? "" : "-", (int16_t)branch_offset > 0 ? (int16_t)branch_offset : abs((int16_t)branch_offset));
 						break;
 					}
+
 					case registers::cr_bit::gt: {
 						printf("bgt cr%d, %s0x%x\n", cr_field, (int16_t)branch_offset > 0 ? "" : "-", (int16_t)branch_offset > 0 ? (int16_t)branch_offset : abs((int16_t)branch_offset));
 						break;
 					}
+
 					case registers::cr_bit::eq: {
 						printf("beq cr%d, %s0x%x\n", cr_field, (int16_t)branch_offset > 0 ? "" : "-", (int16_t)branch_offset > 0 ? (int16_t)branch_offset : abs((int16_t)branch_offset));
 						break;
 					}
 				}
 #endif
-			}
-			else {
+			} else {
 				should_branch = !context->cr[cr_field].test(cr_field_bit);
 #ifdef DEBUG
 				switch (cr_field_bit) {
@@ -227,10 +231,12 @@ namespace handlers {
 						printf("bge cr%d, %s0x%x\n", cr_field, (int16_t)branch_offset > 0 ? "" : "-", (int16_t)branch_offset > 0 ? (int16_t)branch_offset : abs((int16_t)branch_offset));
 						break;
 					}
+
 					case registers::cr_bit::gt: {
 						printf("ble cr%d, %s0x%x\n", cr_field, (int16_t)branch_offset > 0 ? "" : "-", (int16_t)branch_offset > 0 ? (int16_t)branch_offset : abs((int16_t)branch_offset));
 						break;
 					}
+
 					case registers::cr_bit::eq: {
 						printf("bne cr%d, %s0x%x\n", cr_field, (int16_t)branch_offset > 0 ? "" : "-", (int16_t)branch_offset > 0 ? (int16_t)branch_offset : abs((int16_t)branch_offset));
 						break;
@@ -244,13 +250,14 @@ namespace handlers {
 			if (val.bits.lk) {
 				context->lr = context->iar + 1;
 			}
+
 			int32_t offset = (int32_t)((int16_t)(branch_offset) / sizeof(int32_t));
 			context->iar = val.bits.aa ? (uint32_t)(offset) : (uint32_t)(context->iar + offset);
 		}
 	}
 
 	void cmpli(instruction in, virtual_machine* vm, iteration_reason* out_reason) {
-		registers* context = vm->get_context();
+		registers* context = vm->get_current_context();
 		::cmpli val = { in.value };
 
 		context->cr[val.bits.crfd].reset();
@@ -284,7 +291,7 @@ namespace handlers {
 	}
 
 	void cmp(instruction in, virtual_machine* vm, iteration_reason* out_reason) {
-		registers* context = vm->get_context();
+		registers* context = vm->get_current_context();
 		::cmp val = { in.value };
 
 		context->cr[val.bits.crfd].reset();
@@ -318,7 +325,7 @@ namespace handlers {
 	}
 
 	void cmpl(instruction in, virtual_machine* vm, iteration_reason* out_reason) {
-		registers* context = vm->get_context();
+		registers* context = vm->get_current_context();
 		::cmpl val = { in.value };
 
 		context->cr[val.bits.crfd].reset();
@@ -353,7 +360,7 @@ namespace handlers {
 	}
 
 	void _or(instruction in, virtual_machine* vm, iteration_reason* out_reason) {
-		registers* context = vm->get_context();
+		registers* context = vm->get_current_context();
 		::_or val = { in.value };
 
 		context->gpr[val.bits.ra] = (0 || val.bits.ui) == 1 ? context->gpr[val.bits.rs] : context->gpr[val.bits.rs] | (0 || val.bits.ui);
@@ -366,7 +373,7 @@ namespace handlers {
 	}
 
 	void add(instruction in, virtual_machine* vm, iteration_reason* out_reason) {
-		registers* context = vm->get_context();
+		registers* context = vm->get_current_context();
 		addx val = { in.value };
 
 		uint64_t ra = (uint64_t)context->gpr[val.bits.ra];
@@ -416,7 +423,7 @@ namespace handlers {
 	}
 
 	void mfspr(instruction in, virtual_machine* vm, iteration_reason* out_reason) {
-		registers* context = vm->get_context();
+		registers* context = vm->get_current_context();
 		::mfspr val = { in.value };
 
 		switch (((val.bits.spr >> 5) & 0x1F) | (val.bits.spr & 0x1F)) {
@@ -450,7 +457,7 @@ namespace handlers {
 	}
 
 	void mtspr(instruction in, virtual_machine* vm, iteration_reason* out_reason) {
-		registers* context = vm->get_context();
+		registers* context = vm->get_current_context();
 		::mtspr val = { in.value };
 
 		switch (((val.bits.spr >> 5) & 0x1F) | (val.bits.spr & 0x1F)) {
@@ -495,7 +502,7 @@ namespace handlers {
 	}
 
 	void bclr(instruction in, virtual_machine* vm, iteration_reason* out_reason) {
-		registers* context = vm->get_context();
+		registers* context = vm->get_current_context();
 		::bundle_19 val = { in.value };
 
 		if (val.bits.bo & 0b10100) {
@@ -539,31 +546,37 @@ std::unordered_map<uint32_t, std::function<void(instruction, virtual_machine*, i
 	{ op_bundle_19, handlers::bundle_19 },
 };
 
-void virtual_machine::execute(uint8_t* payload, uint32_t size) {
+void virtual_machine::execute(uint8_t* payload) {
 	printf("\n======== EXECUTING PAYLOAD 0x%p ========\n", payload);
 
-	context = registers();
-	memset(ram, 0, RAM);
-	memset(stack, 0, RAM);
+	set_payload(payload);
+	memset(get_stack(), 0, STACK);
 
-	memcpy(ram, payload, size * sizeof(uint32_t));
-	context.gpr[1] = (uint64_t)&stack[STACK];
+	get_current_context()->gpr[1] = (uint64_t)&get_stack()[STACK];
 
-	do {
-		instruction in = { _byteswap_ulong(*(uint32_t*)(&payload[context.iar * sizeof(uint32_t)])) };
-		if (table[in.bits.opcode]) {
-			iteration_reason reason = it_ok;
-			table[in.bits.opcode](in, this, &reason);
+	CreateThread(0, 0, [](LPVOID param) -> DWORD {
+		virtual_machine* _this = (virtual_machine*)param;
 
-			if (reason == it_continue) continue;
-			if (reason == it_return) return;
-		}
+		while (true) {
+			uint8_t* payload = _this->get_payload();
+			instruction in = { _byteswap_ulong(*(uint32_t*)(&payload[_this->get_current_context()->iar * sizeof(uint32_t)])) };
+			if (table[in.bits.opcode]) {
+				iteration_reason reason = it_ok;
+				table[in.bits.opcode](in, _this, &reason);
 
-		context.iar++;
-	} while (context.iar < size);
+				if (reason == it_continue) continue;
+				if (reason == it_return) return 0;
+			} else return 0;
+
+			_this->get_current_context()->iar++;
+		};
+
+		delete _this;
+		return 0;
+	}, this, 0, 0);
 }
 
-void virtual_machine::add_syscall(void(*function)(virtual_machine*), int id) {
+void core_machine::add_syscall(void(*function)(virtual_machine*), int id) {
 	if (id < MAX_SYSCALLS) {
 		syscall_table[id] = function;
 	}
@@ -571,14 +584,28 @@ void virtual_machine::add_syscall(void(*function)(virtual_machine*), int id) {
 
 void virtual_machine::print_registers() {
 	for (int i = 0; i < 32; i++) {
-		printf("r%i=0x%016I64X ", i, context.gpr[i]);
+		printf("r%i=0x%016I64X ", i, get_current_context()->gpr[i]);
 
 		if ((i + 1) % 4 == 0) {
 			printf("\n");
 		}
 	}
 
-	printf("msr=0x%016I64X iar=0x%016I64X lr=0x%016I64X ctr=0x%016I64X\n", context.msr, context.iar, context.lr, context.ctr);
-	printf("cr0=0x%X cr1=0x%X cr2=0x%X cr3=0x%X\n", context.cr[0].to_ulong(), context.cr[1].to_ulong(), context.cr[2].to_ulong(), context.cr[3].to_ulong());
-	printf("cr4=0x%X cr5=0x%X cr6=0x%X cr7=0x%X\n", context.cr[4].to_ulong(), context.cr[5].to_ulong(), context.cr[6].to_ulong(), context.cr[7].to_ulong());
+	printf("msr=0x%016I64X iar=0x%016I64X lr=0x%016I64X ctr=0x%016I64X\n", get_current_context()->msr, get_current_context()->iar, get_current_context()->lr, get_current_context()->ctr);
+	printf("cr0=0x%X cr1=0x%X cr2=0x%X cr3=0x%X\n", get_current_context()->cr[0].to_ulong(), get_current_context()->cr[1].to_ulong(), get_current_context()->cr[2].to_ulong(), get_current_context()->cr[3].to_ulong());
+	printf("cr4=0x%X cr5=0x%X cr6=0x%X cr7=0x%X\n", get_current_context()->cr[4].to_ulong(), get_current_context()->cr[5].to_ulong(), get_current_context()->cr[6].to_ulong(), get_current_context()->cr[7].to_ulong());
+}
+
+virtual_machine* core_machine::create_vm(uint32_t thread_id) {
+	if (context.find(thread_id) == end(context)) {
+		virtual_machine* vm = new virtual_machine();
+		if (vm) {
+			context[thread_id] = registers();
+			vm->set_thread_id(thread_id);
+		}
+
+		return vm;
+	}
+
+	return nullptr;
 }

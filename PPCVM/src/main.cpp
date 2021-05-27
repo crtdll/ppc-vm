@@ -1,33 +1,46 @@
 #include "stdafx.h"
 #include "virtual_machine.h"
 
-void setup_syscalls(virtual_machine* vm) {
-	vm->add_syscall([](virtual_machine* vm) {
+void setup_syscalls() {
+    get_core()->add_syscall([](virtual_machine* vm) {
 		// for now, only supports formatters
-		printf("[PRINTF] %s", (const char*)(vm->get_context()->gpr[3]));
+		printf("[PRINTF] %s", (const char*)(vm->get_current_context()->gpr[3]));
 	}, 0);
 
-	vm->add_syscall([](virtual_machine* vm) {
+    get_core()->add_syscall([](virtual_machine* vm) {
 		// set r3 to the address of ram
-		vm->get_context()->gpr[3] = (uint64_t)vm->get_ram();
+		vm->get_current_context()->gpr[3] = (uint64_t)get_core()->get_ram();
 	}, 1);
 
-	vm->add_syscall([](virtual_machine* vm) {
+    get_core()->add_syscall([](virtual_machine* vm) {
 		// print stack
-		printf("current stack allocated: 0x%llX\n", (uint64_t)&vm->get_stack()[STACK] - vm->get_context()->gpr[1]);
-		printf("last stack frame: 0x%llx\n", *(uint64_t*)vm->get_context()->gpr[1]);
+		printf("current stack allocated: 0x%llX\n", (uint64_t)&vm->get_stack()[STACK] - vm->get_current_context()->gpr[1]);
+		printf("last stack frame: 0x%llx\n", *(uint64_t*)vm->get_current_context()->gpr[1]);
 	}, 2);
 
-	vm->add_syscall([](virtual_machine* vm) {
+    get_core()->add_syscall([](virtual_machine* vm) {
 		// print registers
 		vm->print_registers();
 		printf("\n");
 	}, 3);
 
-	vm->add_syscall([](virtual_machine* vm) {
+    get_core()->add_syscall([](virtual_machine* vm) {
 		// memset
-		memset((void*)vm->get_context()->gpr[3], (int)vm->get_context()->gpr[4], vm->get_context()->gpr[5]);
+		memset((void*)vm->get_current_context()->gpr[3], (int)vm->get_current_context()->gpr[4], vm->get_current_context()->gpr[5]);
 	}, 4);
+
+	get_core()->add_syscall([](virtual_machine* vm) {
+		// get execution address
+        vm->get_current_context()->gpr[3] = (uint64_t)vm->get_payload();
+	}, 5);
+
+    get_core()->add_syscall([](virtual_machine* vm) {
+        // "create thread"
+        virtual_machine* payload = get_core()->create_vm(vm->get_current_context()->gpr[3]);
+        if (payload) {
+            payload->execute((uint8_t*)vm->get_current_context()->gpr[4]);
+        }
+    }, 6);
 }
 
 int main() {
@@ -114,7 +127,7 @@ int main() {
         0x38, 0x80, 0x00, 0x69,
         0x38, 0xA0, 0x01, 0x00,
         0x48, 0x00, 0x00, 0x19,
-        0x38, 0x21, 0x00, 0x10,
+        0x38, 0x21, 0x00, 0x30,
         0x81, 0x81, 0xFF, 0xF8,
         0x7D, 0x88, 0x03, 0xA6,
         0xFF, 0xFF, 0xFF, 0xFF, // TEST BREAKPOINT TO CHECK RAM+0x200
@@ -124,16 +137,6 @@ int main() {
         0x4E, 0x80, 0x00, 0x20
     };
 
-
-    /*
-    * # example_2
-    * li %r3, 8
-    * li %r4, 6
-    * cmpw %cr4, %r3, %r4
-    * bge %cr4, -0x4
-    * blr
-    */
-
     uint8_t example_2[] = {
         0x38, 0x60, 0x00, 0x08,
         0x38, 0x80, 0x00, 0x06,
@@ -142,12 +145,48 @@ int main() {
         0x4E, 0x80, 0x00, 0x20
     };
 
+    uint8_t example_3[] = {
+        0x7D, 0x88, 0x02, 0xA6,
+        0x91, 0x81, 0xFF, 0xF8,
+        0x94, 0x21, 0xFF, 0xF0,
+        0x38, 0x00, 0x00, 0x05,
+        0x44, 0x00, 0x00, 0x02,
+        0x38, 0x63, 0x00, 0x38,
+        0x7C, 0x64, 0x1B, 0x78,
+        0x38, 0x60, 0x00, 0xFF,
+        0x38, 0x00, 0x00, 0x06,
+        0x44, 0x00, 0x00, 0x02,
+        0x38, 0x21, 0x00, 0x10,
+        0x81, 0x81, 0xFF, 0xF8,
+        0x7D, 0x88, 0x03, 0xA6,
+        0x4E, 0x80, 0x00, 0x20,
+        0x38, 0x60, 0x00, 0x69,
+        0x38, 0x00, 0x00, 0x03,
+        0x44, 0x00, 0x00, 0x02,
+        0x4E, 0x80, 0x00, 0x20
+    };
 
-    virtual_machine vm;
-    setup_syscalls(&vm);
+    setup_syscalls();
 
-	vm.execute(example_1, sizeof(example_1) / sizeof(uint32_t));
-	vm.execute(example_2, sizeof(example_2) / sizeof(uint32_t));
+    // ** execute takes care of cleaning up the allocations.
+
+    // majority test
+    virtual_machine* payload_1 = get_core()->create_vm(1);
+    if (payload_1) {
+        payload_1->execute(example_1);
+    }
+
+    // branch condition test
+	virtual_machine* payload_2 = get_core()->create_vm(2);
+    if (payload_2) {
+       payload_2->execute(example_2);
+    }
+    
+    // threading test
+	virtual_machine* payload_3 = get_core()->create_vm(2);
+	if (payload_3) {
+        payload_3->execute(example_3);
+	}
 
     system("pause");
     return 0;
