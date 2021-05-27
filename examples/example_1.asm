@@ -119,7 +119,7 @@ li %r4, 0x69
 li %r5, 0x100
 bl 0x18 # memset ram+0x200 to 0x69 (check in debugger)
 
-addi %r1, %r1, 0x10
+addi %r1, %r1, 0x30
 lwz %r12, -0x8(%r1)
 mtlr %r12
 blr
