@@ -598,16 +598,15 @@ void virtual_machine::print_registers() {
 	printf("cr4=0x%X cr5=0x%X cr6=0x%X cr7=0x%X\n", get_current_context()->cr[4].to_ulong(), get_current_context()->cr[5].to_ulong(), get_current_context()->cr[6].to_ulong(), get_current_context()->cr[7].to_ulong());
 }
 
-virtual_machine* core_machine::create_vm(uint32_t thread_id) {
-	if (context.find(thread_id) == end(context)) {
-		virtual_machine* vm = new virtual_machine();
-		if (vm) {
-			context[thread_id] = registers();
-			vm->set_thread_id(thread_id);
-		}
+virtual_machine* core_machine::create_vm(uint32_t* thread_id) {
+	virtual_machine* vm = new virtual_machine();
+	if (vm) {
+		uint32_t id = ++thread_id_count;
+		if (thread_id) *thread_id = id;
 
-		return vm;
+		context[id] = registers();
+		vm->set_thread_id(id);
 	}
 
-	return nullptr;
+	return vm;
 }

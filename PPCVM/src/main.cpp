@@ -36,9 +36,11 @@ void setup_syscalls() {
 
     get_core()->add_syscall([](virtual_machine* vm) {
         // "create thread"
-        virtual_machine* payload = get_core()->create_vm(vm->get_current_context()->gpr[3]);
+	    // r3=func, r4=arg, r5=out thread id
+
+        virtual_machine* payload = get_core()->create_vm((uint32_t*)vm->get_current_context()->gpr[5]);
         if (payload) {
-            payload->execute((uint8_t*)vm->get_current_context()->gpr[4], (void*)vm->get_current_context()->gpr[5]);
+            payload->execute((uint8_t*)vm->get_current_context()->gpr[3], (void*)vm->get_current_context()->gpr[4]);
         }
     }, 6);
 }
@@ -151,11 +153,10 @@ int main() {
         0x94, 0x21, 0xFF, 0xF0,
         0x38, 0x00, 0x00, 0x05,
         0x44, 0x00, 0x00, 0x02,
-        0x38, 0x63, 0x00, 0x3C,
-        0x38, 0xA0, 0x00, 0x59,
-        0x7C, 0x64, 0x1B, 0x78,
-        0x38, 0x60, 0x00, 0xFF,
-        0x38, 0x00, 0x00, 0x06,
+        0x38, 0x63, 0x00, 0x38,
+		0x38, 0x80, 0x00, 0x59,
+		0x38, 0xA0, 0x00, 0x00,
+		0x38, 0x00, 0x00, 0x06,
         0x44, 0x00, 0x00, 0x02,
         0x38, 0x21, 0x00, 0x10,
         0x81, 0x81, 0xFF, 0xF8,
@@ -172,19 +173,19 @@ int main() {
     // ** execute takes care of cleaning up the allocations.
 
     // majority test
-    virtual_machine* payload_1 = get_core()->create_vm(1);
+    virtual_machine* payload_1 = get_core()->create_vm();
     if (payload_1) {
         payload_1->execute(example_1);
     }
 
     // branch condition test
-	virtual_machine* payload_2 = get_core()->create_vm(2);
+	virtual_machine* payload_2 = get_core()->create_vm();
     if (payload_2) {
         payload_2->execute(example_2);
     }
     
     // threading test
-	virtual_machine* payload_3 = get_core()->create_vm(3);
+	virtual_machine* payload_3 = get_core()->create_vm();
 	if (payload_3) {
         payload_3->execute(example_3);
 	}

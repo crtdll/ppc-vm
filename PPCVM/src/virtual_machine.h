@@ -12,7 +12,7 @@ class virtual_machine;
 
 class core_machine {
 public:
-	virtual_machine* create_vm(uint32_t thread_id);
+	virtual_machine* create_vm(uint32_t* thread_id = nullptr);
 	void add_syscall(void(*function)(virtual_machine*), int id);
 
 	uint8_t* get_ram() { return ram; }
@@ -22,6 +22,7 @@ protected:
 	std::unordered_map<uint32_t, registers> context;
 	uint8_t ram[RAM];
 	void* syscall_table[MAX_SYSCALLS];
+	uint32_t thread_id_count;
 };
 
 core_machine* get_core();
